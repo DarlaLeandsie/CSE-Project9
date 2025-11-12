@@ -68,3 +68,105 @@ def next_screen():
     fade_in(welcome_label)
 
 tk.Button(start_frame, text="Begin", command=start_app).pack(pady=10)
+
+# Income Screen
+income_frame = tk.Frame(window)
+
+welcome_label = tk.Label(income_frame, text="", fg="blue")
+welcome_label.pack(pady=5)
+
+tk.Label(income_frame, text="Enter your monthly income:").pack(pady=10)
+income_entry = tk.Entry(income_frame)
+income_entry.pack()
+income_error = tk.Label(income_frame, fg="red")
+income_error.pack(pady=5)
+
+def save_income():
+    income_error.config(text="")
+    try:
+        income_value = float(income_entry.get())
+        income.set(income_value)
+
+        fade_out(welcome_label)
+
+        window.after(450, lambda: (
+            income_frame.pack_forget(),
+            income_frame.pack(fill="both", expand=True)
+        ))
+    except ValueError:
+        income_error.config(text="You must enter a valid number as your income.")
+
+tk.Button(income_frame, text="Continue", command=save_income).pack(pady=10)
+
+# Expenses Screen
+expense_frame = tk.Frame(window)
+
+tk.Label(expense_frame, text="Add Expense").pack(pady=10)
+
+tk.Label(expense_frame, text="Category:").pack()
+category_entry = tk.Entry(expense_frame)
+category_entry.pack()
+
+tk.Label(expense_frame, text="Amount:").pack()
+amount_entry = tk.Entry(expense_frame)
+amount_entry.pack()
+
+expense_error = tk.Label(expense_frame, fg="red")
+expense_error.pack(pady=5)
+
+expense_success = tk.Label(expense_frame, fg="green")
+expense_success.pack(pady=5)
+
+def add_grocery_expense():
+    #Clear previous messages
+    expense_error.config(text='')
+    expense_success.config(text='')
+
+    category = category_entry.get().strip()
+    value = amount_entry.get().strip()
+
+    if not category:
+        expense_error.config(text="Enter a valid category.")
+        return
+    try:
+        val = float(value)
+    except ValueError:
+        expense_error.config(text="Amount must be a number.")
+        return
+    
+    grocery.categories.append(category)
+    grocery.expenses.append(val)
+    
+    category_entry.delete(0, tk.END)
+    amount_entry.delete(0, tk.END)
+    
+    expense_success.config(text="Expense added.")
+
+tk.Button(expense_frame, text="Add Expense", command=add_grocery_expense).pack(pady=5)
+
+def finish_grocery():
+    total = sum(grocery.expenses)
+    bal = functions.calc_balance(income.get(), total)
+    
+    expense_frame.pack_forget()
+    result_frame.pack(fill="both", expand=True)
+    
+    result_label.config(text=f"Total Grocery: ${total:.2f}\nRemaining Balance: ${bal:.2f}")
+    
+    expense_list.delete(0, tk.END)
+    for c, e in zip(grocery.categories, grocery.expenses):
+        expense_list.insert(tk.END, f"{c}: ${e:.2f}")
+
+tk.Button(expense_frame, text="Finish", command=finish_grocery).pack(pady=10)
+
+# ------------------ Frame 4: Results ------------------
+result_frame = tk.Frame(window)
+
+result_label = tk.Label(result_frame, text="", font=("Times New Roman", 12))
+result_label.pack(pady=10)
+
+expense_list = tk.Listbox(result_frame)
+expense_list.pack(fill="both", expand=True, pady=5)
+
+# ------------------ Run App ------------------
+window.mainloop()
