@@ -7,8 +7,10 @@ import os
 FADE_STEP = 0.1      
 FADE_DELAY = 50      
 
+# -------------------------------------------------------------
+# BASE SCREEN
+# -------------------------------------------------------------
 class ScreenBase(tk.Frame):
-    """Base class for screens with fade animation support."""
     def __init__(self, master, app, **kwargs):
         super().__init__(master, **kwargs)
         self.app = app
@@ -155,40 +157,48 @@ class ProcessScreen(ScreenBase):
 
 
 # -------------------------------------------------------------
-# DATAFILE SCREEN  **UPDATED**
+# DATAFILE SCREEN
 # -------------------------------------------------------------
 class DatafileScreen(ScreenBase):
     def __init__(self, master, app):
         super().__init__(master, app, bg="#fff8f0")
         self.columnconfigure(0, weight=1)
+        self.selected_choice = None
         self.build()
 
     def build(self):
-        # Question: Edit existing file?
+        # Question
         q_label = tk.Label(self, text="Do you want to edit an existing save file?",
                            font=("Arial",16), bg="#fff8f0")
-        q_label.grid(row=0, column=0, pady=(60,10))
+        q_label.grid(row=0, column=0, pady=(60,20))
         self.widgets.append(q_label)
 
-        # Yes/No dropdown
-        self.choice_var = tk.StringVar(value="No")
-        choice_menu = ttk.Combobox(self, textvariable=self.choice_var,
-                                   values=["Yes", "No"], state="readonly", width=10)
-        choice_menu.grid(row=1, column=0)
-        self.widgets.append(choice_menu)
+        # YES / NO buttons
+        button_row = tk.Frame(self, bg="#fff8f0")
+        button_row.grid(row=1, column=0, pady=(0,20))
+        self.widgets.append(button_row)
 
-        # Label for filename entry
+        yes_btn = ttk.Button(button_row, text="Yes",
+                             command=lambda: self.select_choice("Yes"))
+        no_btn = ttk.Button(button_row, text="No",
+                            command=lambda: self.select_choice("No"))
+
+        yes_btn.grid(row=0, column=0, padx=10)
+        no_btn.grid(row=0, column=1, padx=10)
+
+        self.widgets.extend([yes_btn, no_btn])
+
+        # Filename label (hidden initially)
         self.entry_label = tk.Label(self,
                                     text="Enter filename (.txt):",
                                     font=("Arial",16),
                                     bg="#fff8f0")
-        self.entry_label.grid(row=2, column=0, pady=(30,10))
         self.widgets.append(self.entry_label)
 
-        # Filename entry
-        self.filename_var = tk.StringVar(value=self.app.state.get("datafile_name",""))
-        self.entry = ttk.Entry(self, textvariable=self.filename_var, width=30, font=("Arial",14))
-        self.entry.grid(row=3, column=0)
+        # Filename entry (hidden initially)
+        self.filename_var = tk.StringVar()
+        self.entry = ttk.Entry(self, textvariable=self.filename_var,
+                               width=30, font=("Arial",14))
         self.widgets.append(self.entry)
 
         # Validation label
@@ -201,20 +211,38 @@ class DatafileScreen(ScreenBase):
         btn_row.grid(row=5, column=0, pady=25)
         self.widgets.append(btn_row)
 
-        back = ttk.Button(btn_row, text="Back",
-                          command=lambda: self.app.show_screen("process"))
-        cont = ttk.Button(btn_row, text="Continue",
-                          command=self.validate_and_save)
+        self.back_btn = ttk.Button(btn_row, text="Back",
+                                   command=lambda: self.app.show_screen("process"))
+        self.cont_btn = ttk.Button(btn_row, text="Continue",
+                                   command=self.validate_and_save)
+        self.cont_btn.state(["disabled"])  # 🔒 Continue disabled initially
 
-        back.grid(row=0, column=0, padx=10)
-        cont.grid(row=0, column=1, padx=10)
+        self.back_btn.grid(row=0, column=0, padx=10)
+        self.cont_btn.grid(row=0, column=1, padx=10)
 
-        self.widgets.extend([back, cont])
+        self.widgets.extend([self.back_btn, self.cont_btn])
+
+    def select_choice(self, choice):
+        """Called when Yes/No is clicked, reveals filename box and enables Continue."""
+        self.selected_choice = choice
+
+        # Show label + entry
+        self.entry_label.grid(row=2, column=0, pady=(20,10))
+        self.entry.grid(row=3, column=0)
+
+        # Clear validation
+        self.val_lbl.config(text="")
+
+        # Enable Continue button
+        self.cont_btn.state(["!disabled"])
 
     def validate_and_save(self):
-        """Validates either new or existing filename depending on Yes/No choice."""
+        """Validates filename depending on Yes/No selection."""
+        if not self.selected_choice:
+            self.val_lbl.config(text="Please choose Yes or No.")
+            return
+
         name = self.filename_var.get().strip()
-        choice = self.choice_var.get()
 
         if not name:
             self.val_lbl.config(text="Filename cannot be empty.")
@@ -224,19 +252,19 @@ class DatafileScreen(ScreenBase):
             self.val_lbl.config(text="Letters, numbers, underscores only.")
             return
 
-        # Path of file
         path = name + ".txt"
 
-        # If user chose YES → must exist
-        if choice == "Yes":
+        # YES → file must exist
+        if self.selected_choice == "Yes":
             if not os.path.isfile(path):
                 self.val_lbl.config(text="File does not exist.")
                 return
 
-        # If NO → new file name (can overwrite later)
+        # Save choice to state
         self.app.state["datafile_name"] = name
-        self.app.state["editing_existing"] = (choice == "Yes")
+        self.app.state["editing_existing"] = (self.selected_choice == "Yes")
 
+        # Go forward
         self.app.show_screen("income")
 
 
@@ -245,42 +273,176 @@ class DatafileScreen(ScreenBase):
 # -------------------------------------------------------------
 class IncomeScreen(ScreenBase):
     def __init__(self, master, app):
-        super().__init__(master, app, bg="#f0fff0")
+        super().__init__(master, app, bg="#e8f7ff")
         self.columnconfigure(0, weight=1)
         self.build()
 
     def build(self):
-        label = tk.Label(self, text="Enter your monthly income:", font=("Arial",16), bg="#f0fff0")
-        label.grid(row=0, column=0, pady=(80,10))
-        self.widgets.append(label)
+        title = tk.Label(self, text="Enter your monthly income:",
+                         font=("Helvetica", 20), bg="#e8f7ff")
+        title.grid(row=0, column=0, pady=(80, 10))
+        self.widgets.append(title)
 
-        self.income_var = tk.StringVar(value=str(self.app.state.get("income","")))
-        entry = ttk.Entry(self, textvariable=self.income_var, width=20)
+        self.income_var = tk.StringVar(value=str(self.app.state.get("income", "")))
+        entry = ttk.Entry(self, textvariable=self.income_var,
+                          width=20, font=("Arial", 14))
         entry.grid(row=1, column=0)
         self.widgets.append(entry)
 
-        btn_row = tk.Frame(self, bg="#f0fff0")
-        btn_row.grid(row=2, column=0, pady=20)
+        self.val_lbl = tk.Label(self, text="", fg="red", bg="#e8f7ff")
+        self.val_lbl.grid(row=2, column=0, pady=10)
+        self.widgets.append(self.val_lbl)
+
+        # Buttons
+        btn_row = tk.Frame(self, bg="#e8f7ff")
+        btn_row.grid(row=3, column=0, pady=20)
         self.widgets.append(btn_row)
 
-        back = ttk.Button(btn_row, text="Back", command=lambda: self.app.show_screen("datafile"))
-        cont = ttk.Button(btn_row, text="Continue", command=self.save_income)
+        back = ttk.Button(btn_row, text="Back",
+                          command=lambda: self.app.show_screen("datafile"))
+        cont = ttk.Button(btn_row, text="Continue", command=self.validate)
 
         back.grid(row=0, column=0, padx=10)
         cont.grid(row=0, column=1, padx=10)
 
         self.widgets.extend([back, cont])
 
-    def save_income(self):
+    def validate(self):
         try:
-            val = float(self.income_var.get())
-            if val < 0: raise ValueError
+            income = float(self.income_var.get())
+            if income < 0:
+                raise ValueError
+            self.app.state["income"] = income
+            self.app.show_screen("category")
         except:
-            messagebox.showerror("Error","Income must be a positive number.")
+            self.val_lbl.config(text="Please enter a valid income.")
+
+
+# -------------------------------------------------------------
+# EXPENSE DIALOG
+# -------------------------------------------------------------
+class ExpenseDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Add Expense")
+        self.resizable(False, False)
+        self.result = None
+
+        # Center the pop-up over parent
+        self.transient(parent)
+        self.grab_set()
+        self.update_idletasks()
+        w = 300
+        h = 150
+        x = parent.winfo_rootx() + parent.winfo_width()//2 - w//2
+        y = parent.winfo_rooty() + parent.winfo_height()//2 - h//2
+        self.geometry(f"{w}x{h}+{x}+{y}")
+
+        tk.Label(self, text="Expense Name:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
+        self.name_entry = tk.Entry(self)
+        self.name_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(self, text="Cost:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
+        self.cost_entry = tk.Entry(self)
+        self.cost_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Label(self, text="Quantity:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
+        self.qty_entry = tk.Entry(self)
+        self.qty_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        tk.Button(self, text="Add", command=self.on_add).grid(row=3, column=0, columnspan=2, pady=10)
+
+    def on_add(self):
+        name = self.name_entry.get().strip()
+        if not name:
+            messagebox.showerror("Error", "Expense name is required.")
             return
 
-        self.app.state["income"] = val
-        self.app.show_screen("category")
+        try:
+            cost = float(self.cost_entry.get())
+            qty = int(self.qty_entry.get())
+        except ValueError:
+            messagebox.showerror("Error", "Cost must be a number and quantity an integer.")
+            return
+
+        self.result = (name, qty, cost)
+        self.destroy()
+
+
+# -------------------------------------------------------------
+# CATEGORY BOX
+# -------------------------------------------------------------
+class CategoryBox(tk.Frame):
+    BOX_WIDTH = 200
+    BOX_HEIGHT = 140
+    BOX_PADDING = 15  # padding for content
+
+    def __init__(self, master, category_name, remove_callback):
+        super().__init__(master, bd=2, relief="groove", width=self.BOX_WIDTH, height=self.BOX_HEIGHT)
+        self.grid_propagate(False)
+
+        self.category_name = category_name
+        self.expenses = []
+        self.remove_callback = remove_callback
+
+        self.content_frame = tk.Frame(self)
+        self.content_frame.place(relx=0.5, rely=0.5, anchor="center")
+
+        self.name_label = tk.Label(self.content_frame, text=category_name, font=("Arial", 12, "bold"), wraplength=self.BOX_WIDTH-10, justify="center")
+        self.name_label.pack()
+        self.divider = tk.Frame(self.content_frame, height=2, bg="black")
+        self.divider.pack(fill="x", pady=5)
+        self.no_expense_label = tk.Label(self.content_frame, text="(no added expenses)", font=("Arial", 10, "italic"), fg="gray", justify="center")
+        self.no_expense_label.pack()
+
+        self.add_btn = tk.Button(self, text=f"Add expense to {category_name}", wraplength=self.BOX_WIDTH-10, justify="center", command=self.add_expense)
+        self.del_btn = tk.Button(self, text=f"Delete {category_name}", wraplength=self.BOX_WIDTH-10, justify="center", command=self.delete_category)
+
+        self.bind_recursive(self, "<Enter>", self.on_hover)
+        self.bind_recursive(self, "<Leave>", self.on_leave)
+
+    def bind_recursive(self, widget, event, func):
+        widget.bind(event, func)
+        for child in widget.winfo_children():
+            self.bind_recursive(child, event, func)
+
+    def on_hover(self, event=None):
+        self.content_frame.place_forget()
+        self.add_btn.place(relx=0.5, rely=0.35, anchor="center")
+        self.del_btn.place(relx=0.5, rely=0.65, anchor="center")
+
+    def on_leave(self, event=None):
+        self.add_btn.place_forget()
+        self.del_btn.place_forget()
+        self.content_frame.place(relx=0.5, rely=0.5, anchor="center")
+
+    def add_expense(self):
+        dlg = ExpenseDialog(self)
+        self.wait_window(dlg)
+        if dlg.result:
+            name, qty, cost = dlg.result
+            self.expenses.append((name, qty, cost))
+            self.update_content()
+
+    def update_content(self):
+        for widget in self.content_frame.winfo_children():
+            widget.destroy()
+
+        tk.Label(self.content_frame, text=self.category_name, font=("Arial", 12, "bold"), wraplength=self.BOX_WIDTH-10, justify="center").pack()
+        tk.Frame(self.content_frame, height=2, bg="black").pack(fill="x", pady=5)
+
+        if not self.expenses:
+            tk.Label(self.content_frame, text="(no added expenses)", font=("Arial", 10, "italic"), fg="gray", justify="center").pack()
+        else:
+            for name, qty, cost in self.expenses:
+                tk.Label(self.content_frame, text=f"{name} x{qty} = ${cost*qty:.2f}", wraplength=self.BOX_WIDTH-10, justify="center").pack()
+
+        req_height = max(self.BOX_HEIGHT, self.content_frame.winfo_reqheight() + 2*self.BOX_PADDING)
+        self.config(height=req_height)
+        self.content_frame.place(relx=0.5, rely=0.5, anchor="center")
+
+    def delete_category(self):
+        self.remove_callback(self)
 
 
 # -------------------------------------------------------------
@@ -289,114 +451,60 @@ class IncomeScreen(ScreenBase):
 class CategoryScreen(ScreenBase):
     def __init__(self, master, app):
         super().__init__(master, app, bg="#f8f0ff")
-        self.columnconfigure(0, weight=1)
-        self.categories = {}
+        self.category_boxes = []
+        self.max_cols = 4
         self.build()
 
     def build(self):
-        label = tk.Label(self, text="Add categories and expenses:", font=("Arial",16), bg="#f8f0ff")
-        label.grid(row=0, column=0, pady=(40,10))
-        self.widgets.append(label)
+        self.add_btn = ttk.Button(self, text="Add Category", command=self.add_category)
+        self.add_btn.grid(row=0, column=0, pady=20)
 
-        add_btn = ttk.Button(self, text="Add Category", command=self.add_category)
-        add_btn.grid(row=1, column=0, pady=10)
-        self.widgets.append(add_btn)
-
-        self.cat_frame = tk.Frame(self, bg="#f8f0ff")
-        self.cat_frame.grid(row=2, column=0)
-        self.widgets.append(self.cat_frame)
+        self.box_frame = tk.Frame(self, bg="#f8f0ff")
+        self.box_frame.grid(row=1, column=0)
 
         btn_row = tk.Frame(self, bg="#f8f0ff")
-        btn_row.grid(row=3, column=0, pady=20)
-        self.widgets.append(btn_row)
-
+        btn_row.grid(row=2, column=0, pady=20)
         back = ttk.Button(btn_row, text="Back", command=lambda: self.app.show_screen("income"))
         cont = ttk.Button(btn_row, text="Continue", command=self.finish)
-
         back.grid(row=0, column=0, padx=10)
         cont.grid(row=0, column=1, padx=10)
 
-        self.widgets.extend([back, cont])
-
     def add_category(self):
-        name = simpledialog.askstring("Add Category","Enter category name:", parent=self)
+        name = simpledialog.askstring("New Category", "Enter your new category's name:", parent=self)
         if not name: return
-        if name in self.categories:
-            messagebox.showerror("Error","Category exists.")
-            return
-        self.categories[name] = {}
+        box = CategoryBox(self.box_frame, name, self.remove_category)
+        self.category_boxes.append(box)
+        self.reposition_boxes()
 
-        row = tk.Frame(self.cat_frame, bg="#f8f0ff")
-        row.pack(pady=5)
+    def remove_category(self, box):
+        box.destroy()
+        self.category_boxes.remove(box)
+        self.reposition_boxes()
 
-        cat_btn = ttk.Button(row, text=f"{name}: Add Expense",
-                             command=partial(self.add_expense, name))
-        del_btn = ttk.Button(row, text="Delete", command=partial(self.delete_cat, name, row))
-
-        cat_btn.pack(side="left", padx=5)
-        del_btn.pack(side="left", padx=5)
-
-    def add_expense(self, category):
-        dlg = ExpenseDialog(self, category)
-        self.wait_window(dlg.top)
-
-        if dlg.result:
-            name, amount, cost = dlg.result
-            # merging repeated items
-            self.categories[category][name] = (amount, cost)
-
-    def delete_cat(self, name, frame):
-        if messagebox.askyesno("Confirm", "Delete category?"):
-            frame.destroy()
-            del self.categories[name]
+    def reposition_boxes(self):
+        for b in self.category_boxes: b.grid_forget()
+        row = 0; col = 0; current_row_boxes = []
+        for i, box in enumerate(self.category_boxes):
+            current_row_boxes.append(box)
+            col += 1
+            if col >= self.max_cols or i == len(self.category_boxes)-1:
+                total_boxes = len(current_row_boxes)
+                start_col = (self.max_cols - total_boxes)//2
+                for j, b in enumerate(current_row_boxes):
+                    b.grid(row=row, column=start_col+j, padx=5, pady=5)
+                current_row_boxes = []; col=0; row+=1
 
     def finish(self):
-        self.app.state["categories"] = self.categories
+        # Save expenses to app.state
+        categories = {}
+        for box in self.category_boxes:
+            categories[box.category_name] = {name:(qty,cost) for name, qty, cost in box.expenses}
+        self.app.state["categories"] = categories
         self.app.show_screen("summary")
 
 
 # -------------------------------------------------------------
-# EXPENSE DIALOG
-# -------------------------------------------------------------
-class ExpenseDialog:
-    def __init__(self, parent, cat):
-        self.result = None
-        self.top = tk.Toplevel(parent)
-        self.top.title(f"Add to {cat}")
-        self.top.transient(parent)
-        self.top.grab_set()
-
-        tk.Label(self.top, text="Expense Name:").pack(pady=4)
-        self.name_var = tk.StringVar()
-        tk.Entry(self.top, textvariable=self.name_var).pack()
-
-        tk.Label(self.top, text="Amount (integer):").pack(pady=4)
-        self.amount_var = tk.StringVar()
-        tk.Entry(self.top, textvariable=self.amount_var).pack()
-
-        tk.Label(self.top, text="Cost (number):").pack(pady=4)
-        self.cost_var = tk.StringVar()
-        tk.Entry(self.top, textvariable=self.cost_var).pack()
-
-        ttk.Button(self.top, text="Add", command=self.finish).pack(pady=10)
-
-    def finish(self):
-        try:
-            name = self.name_var.get().strip()
-            if not name or not re.fullmatch(r"[A-Za-z ]+", name):
-                raise ValueError("Invalid name.")
-
-            amount = int(self.amount_var.get())
-            cost = float(self.cost_var.get())
-
-            self.result = (name, amount, cost)
-            self.top.destroy()
-        except:
-            messagebox.showerror("Error","Invalid input.")
-
-
-# -------------------------------------------------------------
-# SUMMARY SCREEN  **UPDATED**
+# SUMMARY SCREEN
 # -------------------------------------------------------------
 class SummaryScreen(ScreenBase):
     def __init__(self, master, app):
@@ -432,7 +540,6 @@ class SummaryScreen(ScreenBase):
         cats = self.app.state.get("categories",{})
 
         total_expenses = 0
-
         output = []
 
         for cat, items in cats.items():
@@ -444,13 +551,10 @@ class SummaryScreen(ScreenBase):
             output.append("")
 
         leftover = income - total_expenses
-
         output.append(f"Monthly Income: ${income:.2f}")
         output.append(f"Total Expenses: ${total_expenses:.2f}")
         output.append(f"Remaining Balance: ${leftover:.2f}")
-
-        if leftover < 0:
-            output.append("\n⚠ WARNING: You are overspending!")
+        if leftover < 0: output.append("\n⚠ WARNING: You are overspending!")
 
         self.summary_text = "\n".join(output)
         self.text.insert(tk.END, self.summary_text)
@@ -460,25 +564,19 @@ class SummaryScreen(ScreenBase):
     def save_to_file(self):
         fname = self.app.state.get("datafile_name","budget")
         path = fname + ".txt"
-
         cats = self.app.state.get("categories",{})
-
         lines = []
-
-        # file formatting EXACTLY as you requested
         for cat, items in cats.items():
             lines.append(f"{cat}")
             for name, (amt, cost) in items.items():
                 total = amt * cost
                 lines.append(f"{name} : ${total:.2f}")
-            lines.append("")  # blank line between categories
+            lines.append("")
 
         try:
             with open(path, "w", encoding="utf-8") as f:
                 f.write("\n".join(lines))
-
             messagebox.showinfo("Saved", f"Your data has been saved to:\n{path}")
-
         except Exception as e:
             messagebox.showerror("Error", f"Could not save file:\n{e}")
 
@@ -490,14 +588,10 @@ class BudgetApp:
     def __init__(self, root):
         self.root = root
         self.root.title("BudgetBuddy")
-
-        try:
-            self.root.state("zoomed")
-        except:
-            self.root.attributes("-zoomed", True)
+        try: self.root.state("zoomed")
+        except: self.root.attributes("-zoomed", True)
 
         self.state = {}
-
         self.container = tk.Frame(root)
         self.container.pack(fill="both", expand=True)
         self.container.grid_rowconfigure(0, weight=1)
@@ -517,8 +611,7 @@ class BudgetApp:
         self.show_screen("splash")
 
     def show_screen(self, name):
-        if self.current:
-            self.current.grid_remove()
+        if self.current: self.current.grid_remove()
         self.current = self.screens[name]
         self.current.grid()
         self.current.on_show()
